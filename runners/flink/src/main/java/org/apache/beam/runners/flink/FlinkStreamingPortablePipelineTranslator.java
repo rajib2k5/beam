@@ -175,6 +175,11 @@ public class FlinkStreamingPortablePipelineTranslator
         PTransformTranslation.CREATE_VIEW_TRANSFORM_URN,
         (String id, RunnerApi.Pipeline pipeline, StreamingTranslationContext context) -> {});
 
+    //LYFT CUSTOM
+    LyftFlinkStreamingPortableTranslations customTranslations =
+        new LyftFlinkStreamingPortableTranslations();
+    customTranslations.addTo(translatorMap);
+
     this.urnToTransformTranslator = translatorMap.build();
   }
 
