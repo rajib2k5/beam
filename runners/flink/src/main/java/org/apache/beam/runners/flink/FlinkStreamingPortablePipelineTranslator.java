@@ -166,6 +166,12 @@ public class FlinkStreamingPortablePipelineTranslator
         PTransformTranslation.ASSIGN_WINDOWS_TRANSFORM_URN, this::translateAssignWindows);
     translatorMap.put(ExecutableStage.URN, this::translateExecutableStage);
     translatorMap.put(PTransformTranslation.RESHUFFLE_URN, this::translateReshuffle);
+
+    //LYFT CUSTOM
+    LyftFlinkStreamingPortableTranslations customTranslations =
+        new LyftFlinkStreamingPortableTranslations();
+    customTranslations.addTo(translatorMap);
+
     this.urnToTransformTranslator = translatorMap.build();
   }
 
