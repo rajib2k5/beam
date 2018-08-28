@@ -1,12 +1,7 @@
-name: apache_beam
+name: beam
 description: Lyft version of Apache Beam python package
-repository: git@github.com:lyft/beam.git:sdks/python
-report_ci: true
+repository: git@github.com:lyft/beam.git
 credentials: true
-builder:
-  name: s2i
-  params:
-    builder: lyft/s2ipythonlibrary:d9e0138f2f42c9a902573b393e1c307fb0211400
 deploy:
   - name: staging
     legacy: true
