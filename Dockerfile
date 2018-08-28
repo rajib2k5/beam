@@ -5,4 +5,8 @@ WORKDIR /src/beam
 COPY . .
 # Add a symlink to the setup.py code root at the lyft conventional root
 RUN ln -sf /src/beam/sdks/python /code/beam
-RUN cp /code/containers/pythonlibrary/Makefile /code/beam/
+RUN \
+    cp \
+        /code/containers/pythonlibrary/Makefile \
+        /src/beam/manifest.yaml \
+        /code/beam/
