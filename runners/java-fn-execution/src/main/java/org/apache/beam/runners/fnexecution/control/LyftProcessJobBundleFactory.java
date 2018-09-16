@@ -17,6 +17,7 @@
  */
 package org.apache.beam.runners.fnexecution.control;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import java.time.Duration;
@@ -92,8 +93,11 @@ public class LyftProcessJobBundleFactory extends ProcessJobBundleFactory {
     // default assumes execution within already activated virtualenv
     // env is added for debugging purposes, output is only visible when debug logging is enabled
     private static final String SDK_HARNESS_BASH_CMD =
-        System.getProperty(
-            "lyft.pythonWorkerCmd", "env; python -m apache_beam.runners.worker.sdk_worker_main");
+        MoreObjects.firstNonNull(
+            System.getenv("BEAM_PYTHON_WORKER_BASH_CMD"),
+            System.getProperty(
+                "lyft.pythonWorkerCmd",
+                "env; python -m apache_beam.runners.worker.sdk_worker_main"));
     private static final int HARNESS_CONNECT_TIMEOUT_MINS = 5;
 
     private final JobInfo jobInfo;
