@@ -97,7 +97,9 @@ public class LyftProcessJobBundleFactory extends ProcessJobBundleFactory {
             System.getenv("BEAM_PYTHON_WORKER_BASH_CMD"),
             System.getProperty(
                 "lyft.pythonWorkerCmd",
-                "env; python -m apache_beam.runners.worker.sdk_worker_main"));
+                "staging".equals(System.getenv("APPLICATION_ENV"))
+                    ? "service_venv python -m apache_beam.runners.worker.sdk_worker_main"
+                    : "env; python -m apache_beam.runners.worker.sdk_worker_main"));
     private static final int HARNESS_CONNECT_TIMEOUT_MINS = 5;
 
     private final JobInfo jobInfo;
