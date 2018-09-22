@@ -18,6 +18,7 @@
 package org.apache.beam.runners.flink;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.auto.service.AutoService;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -26,6 +27,8 @@ import java.nio.charset.Charset;
 import java.util.Map;
 import java.util.Properties;
 import org.apache.beam.model.pipeline.v1.RunnerApi;
+import org.apache.beam.runners.core.construction.NativeTransforms;
+import org.apache.beam.runners.core.construction.PTransformTranslation;
 import org.apache.beam.runners.flink.FlinkStreamingPortablePipelineTranslator.PTransformTranslator;
 import org.apache.beam.runners.flink.FlinkStreamingPortablePipelineTranslator.StreamingTranslationContext;
 import org.apache.beam.runners.flink.translation.types.CoderTypeInformation;
@@ -46,11 +49,23 @@ public class LyftFlinkStreamingPortableTranslations {
   private static final Logger logger =
       LoggerFactory.getLogger(LyftFlinkStreamingPortableTranslations.class.getName());
 
+  private static final String FLINK_KAFKA_URN = "lyft:flinkKafkaInput";
+  private static final String FLINK_KINESIS_URN = "lyft:flinkKinesisInput";
+
+  @AutoService(NativeTransforms.IsNativeTransform.class)
+  public static class IsFlinkNativeTransform implements NativeTransforms.IsNativeTransform {
+    @Override
+    public boolean test(RunnerApi.PTransform pTransform) {
+      return FLINK_KAFKA_URN.equals(PTransformTranslation.urnForTransformOrNull(pTransform))
+          || FLINK_KINESIS_URN.equals(PTransformTranslation.urnForTransformOrNull(pTransform));
+    }
+  }
+
   public void addTo(
       ImmutableMap.Builder<String, PTransformTranslator<StreamingTranslationContext>>
           translatorMap) {
-    translatorMap.put("lyft:flinkKafkaInput", this::translateKafkaInput);
-    translatorMap.put("lyft:flinkKinesisInput", this::translateKinesisInput);
+    translatorMap.put(FLINK_KAFKA_URN, this::translateKafkaInput);
+    translatorMap.put(FLINK_KINESIS_URN, this::translateKinesisInput);
   }
 
   private void translateKafkaInput(
@@ -109,7 +124,7 @@ public class LyftFlinkStreamingPortableTranslations {
     @Override
     public WindowedValue<byte[]> deserialize(
         byte[] messageKey, byte[] message, String topic, int partition, long offset) {
-      System.out.println("###Kafka record: " + new String(message, Charset.defaultCharset()));
+      //System.out.println("###Kafka record: " + new String(message, Charset.defaultCharset()));
       return WindowedValue.valueInGlobalWindow(message);
     }
 
