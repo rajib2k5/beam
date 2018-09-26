@@ -123,6 +123,8 @@ public class FlinkExecutionEnvironments {
       FlinkPipelineOptions options, List<String> filesToStage, @Nullable String flinkConfigDir) {
 
     LOG.info("Creating a Streaming Environment.");
+    LOG.info("pipelineOptions: {}", options);
+    LOG.info("env: {}", System.getenv());
 
     String masterUrl = options.getFlinkMaster();
     StreamExecutionEnvironment flinkStreamEnv = null;
@@ -151,6 +153,12 @@ public class FlinkExecutionEnvironments {
     final int parallelism =
         determineParallelism(
             options.getParallelism(), flinkStreamEnv.getParallelism(), flinkConfigDir);
+    LOG.info(
+        "Parallelism for {} {} {} is {}",
+        options.getParallelism(),
+        flinkStreamEnv.getParallelism(),
+        flinkConfigDir,
+        parallelism);
     flinkStreamEnv.setParallelism(parallelism);
     // set parallelism in the options (required by some execution code)
     options.setParallelism(parallelism);
