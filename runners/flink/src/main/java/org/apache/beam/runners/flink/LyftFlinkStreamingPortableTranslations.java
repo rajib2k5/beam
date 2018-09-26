@@ -23,7 +23,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.util.Map;
 import java.util.Properties;
 import org.apache.beam.model.pipeline.v1.RunnerApi;

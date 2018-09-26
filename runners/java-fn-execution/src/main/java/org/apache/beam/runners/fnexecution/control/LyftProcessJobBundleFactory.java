@@ -133,6 +133,10 @@ public class LyftProcessJobBundleFactory extends ProcessJobBundleFactory {
       String workerId = idGenerator.getId();
 
       String pipelineOptionsJson = JsonFormat.printer().print(jobInfo.pipelineOptions());
+      // https://issues.apache.org/jira/browse/BEAM-5509
+      pipelineOptionsJson =
+          pipelineOptionsJson.replace(
+              "beam:option:parallelism:v1", "beam:option:INVALIDparallelism:v1");
       HashMap<String, String> env = new HashMap<>();
       env.put("WORKER_ID", workerId);
       env.put("PIPELINE_OPTIONS", pipelineOptionsJson);
