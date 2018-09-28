@@ -261,6 +261,22 @@ task portableWordCount(dependsOn: 'installGcpTest') {
   }
 }
 
+task streamingLeak(dependsOn: 'installGcpTest') {
+  doLast {
+    def options = []
+
+    if (project.hasProperty("jobEndpoint")) {
+      options += ["--job_endpoint=${project.property('jobEndpoint')}"]
+    }
+
+    exec {
+      executable 'sh'
+      args '-c', ". ${envdir}/bin/activate && python -m apache_beam.examples.streaming_leak ${options.join(' ')}"
+    }
+  }
+}
+
+
 task integrationTest(dependsOn: ['installGcpTest', 'sdist']) {
   doLast {
     def cmd_args = []
