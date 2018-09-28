@@ -175,6 +175,9 @@ public class FlinkStreamingPortablePipelineTranslator
         PTransformTranslation.CREATE_VIEW_TRANSFORM_URN,
         (String id, RunnerApi.Pipeline pipeline, StreamingTranslationContext context) -> {});
 
+    TestStreamingPortableTranslation testTranslations = new TestStreamingPortableTranslation();
+    testTranslations.addTo(translatorMap);
+
     this.urnToTransformTranslator = translatorMap.build();
   }
 
