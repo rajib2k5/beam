@@ -70,6 +70,8 @@ runShadow {
   jvmArgs = ["-Xdebug", "-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=5005"]
   if (project.hasProperty("logLevel"))
     jvmArgs += ["-Dorg.slf4j.simpleLogger.defaultLogLevel=${project.property('logLevel')}"]
+
+  // jvmArgs += ["-Dorg.slf4j.simpleLogger.log.bundle_processor.process_bundle=WARN"]
 }
 
 createPortableValidatesRunnerTask(
