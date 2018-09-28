@@ -180,6 +180,9 @@ public class FlinkStreamingPortablePipelineTranslator
         new LyftFlinkStreamingPortableTranslations();
     customTranslations.addTo(translatorMap);
 
+    TestStreamingPortableTranslation testTranslations = new TestStreamingPortableTranslation();
+    testTranslations.addTo(translatorMap);
+
     this.urnToTransformTranslator = translatorMap.build();
   }
 
