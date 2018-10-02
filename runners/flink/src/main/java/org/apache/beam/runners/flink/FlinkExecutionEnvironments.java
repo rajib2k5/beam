@@ -150,7 +150,12 @@ public class FlinkExecutionEnvironments {
     final int parallelism =
         determineParallelism(
             options.getParallelism(), flinkStreamEnv.getParallelism(), flinkConfigDir);
-    LOG.info("Parallelism for {} {} {} is {}", options.getParallelism(), flinkStreamEnv.getParallelism(), flinkConfigDir, parallelism);
+    LOG.info(
+        "Parallelism for {} {} {} is {}",
+        options.getParallelism(),
+        flinkStreamEnv.getParallelism(),
+        flinkConfigDir,
+        parallelism);
     flinkStreamEnv.setParallelism(parallelism);
     // set parallelism in the options (required by some execution code)
     options.setParallelism(parallelism);
