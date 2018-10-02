@@ -27,6 +27,7 @@ import org.apache.beam.runners.fnexecution.control.JobBundleFactory;
 import org.apache.beam.runners.fnexecution.control.StageBundleFactory;
 import org.apache.beam.runners.fnexecution.environment.DockerEnvironmentFactory;
 import org.apache.beam.runners.fnexecution.environment.EmbeddedEnvironmentFactory;
+import org.apache.beam.runners.fnexecution.environment.LyftPythonEnvironmentFactory;
 import org.apache.beam.runners.fnexecution.environment.ProcessEnvironmentFactory;
 import org.apache.beam.runners.fnexecution.provisioning.JobInfo;
 
@@ -40,7 +41,11 @@ class FlinkDefaultExecutableStageContext implements FlinkExecutableStageContext,
             jobInfo,
             ImmutableMap.of(
                 BeamUrns.getUrn(StandardEnvironments.Environments.DOCKER),
-                new DockerEnvironmentFactory.Provider(),
+                // START LYFT CUSTOM
+                (false)
+                    ? new DockerEnvironmentFactory.Provider()
+                    : new LyftPythonEnvironmentFactory.Provider(jobInfo),
+                // END LYFT CUSTOM
                 BeamUrns.getUrn(StandardEnvironments.Environments.PROCESS),
                 new ProcessEnvironmentFactory.Provider(),
                 Environments.ENVIRONMENT_EMBEDDED, // Non Public urn for testing.
