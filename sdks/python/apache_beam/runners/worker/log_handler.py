@@ -21,6 +21,7 @@ from __future__ import absolute_import
 import logging
 import math
 import sys
+import time
 
 import queue
 import threading
@@ -133,7 +134,8 @@ class FnApiLogRecordHandler(logging.Handler):
         # iterator is closed
         return
       except Exception as ex:
-        # reset the stream
+        # reset the stream after waiting a bit
+        time.sleep(1)
         print >> sys.stderr, "Logging client failed: {}... resetting".format(ex)
         self.acquire()
         log_control_iterator = self.connect()
