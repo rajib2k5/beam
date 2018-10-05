@@ -126,6 +126,7 @@ public abstract class ServerFactory {
               // Set the message size to max value here. The actual size is governed by the
               // buffer size in the layers above.
               .maxMessageSize(Integer.MAX_VALUE)
+              .permitKeepAliveWithoutCalls(true)
               .build();
       server.start();
       return server;
