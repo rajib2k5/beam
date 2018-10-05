@@ -60,26 +60,29 @@ class FnApiLogRecordHandler(logging.Handler):
     print >> sys.stderr, "initializing logging thing"
     # Make sure the channel is ready to avoid [BEAM-4649]
     self._log_entry_queue = queue.Queue()
-    self._log_channel = None
-    self._logging_stub = None
 
-    log_control_messages = self.create_channel(log_service_descriptor)
+    options = [
+      # ("grpc.http2.min_time_between_pings_ms", 5000),
+      # ("grpc.http2.max_pings_without_data", 0),
+      # ("grpc.keepalive_time_ms", 5000)
+    ]
+
+    ch = grpc.insecure_channel(log_service_descriptor.url, options=options)
+    grpc.channel_ready_future(ch).result(timeout=60)
+    self._log_channel = grpc.intercept_channel(ch, WorkerIdInterceptor())
+    self._logging_stub = beam_fn_api_pb2_grpc.BeamFnLoggingStub(
+        self._log_channel)
+
+    log_control_messages = self.connect()
     self._reader = threading.Thread(
         target=lambda: self._read_log_control_messages(log_control_messages),
         name='read_log_control_messages')
     self._reader.daemon = True
     self._reader.start()
 
-  def create_channel(self, log_service_descriptor):
+  def connect(self):
     print >> sys.stderr, "creating logging channel"
-    ch = grpc.insecure_channel(log_service_descriptor.url)
-    grpc.channel_ready_future(ch).result(timeout=60)
-    self._log_channel = grpc.intercept_channel(ch, WorkerIdInterceptor())
-    self._logging_stub = beam_fn_api_pb2_grpc.BeamFnLoggingStub(
-        self._log_channel)
-
     return self._logging_stub.Logging(self._write_log_entries())
-
 
   def emit(self, record):
     log_entry = beam_fn_api_pb2.LogEntry()
@@ -106,13 +109,6 @@ class FnApiLogRecordHandler(logging.Handler):
     super(FnApiLogRecordHandler, self).close()
 
 
-  def reset(self):
-    self.acquire()
-
-
-
-    self.release()
-
   def _write_log_entries(self):
     done = False
     while not done:
@@ -130,7 +126,18 @@ class FnApiLogRecordHandler(logging.Handler):
 
   def _read_log_control_messages(self, log_control_iterator):
     # TODO(vikasrk): Handle control messages.
-    for _ in log_control_iterator:
-      pass
+    while True:
+      try:
+        for _ in log_control_iterator:
+          pass
+        # iterator is closed
+        return
+      except Exception as ex:
+        # reset the stream
+        print >> sys.stderr, "Logging client failed: {}... resetting".format(ex)
+        self.acquire()
+        log_control_iterator = self.connect()
+        self.release()
+
 
 

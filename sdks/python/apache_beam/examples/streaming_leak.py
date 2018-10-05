@@ -75,7 +75,7 @@ def run(argv=None):
 
     (messages | 'decode' >> beam.Map(lambda x: x.decode('utf-8'))
               | 'window' >> beam.WindowInto(window.GlobalWindows(),
-                                            trigger=Repeatedly(AfterProcessingTime(15000)),
+                                            trigger=Repeatedly(AfterProcessingTime(1000)),
                                             accumulation_mode=AccumulationMode.DISCARDING)
               | 'timestamp' >> beam.FlatMap(apply_timestamp)
               # | 'window' >> beam.WindowInto(window.FixedWindows(15),
