@@ -59,19 +59,27 @@ class FnApiLogRecordHandler(logging.Handler):
     super(FnApiLogRecordHandler, self).__init__()
     print >> sys.stderr, "initializing logging thing"
     # Make sure the channel is ready to avoid [BEAM-4649]
-    ch = grpc.insecure_channel(log_service_descriptor.url)
-    grpc.channel_ready_future(ch).result(timeout=60)
-    self._log_channel = grpc.intercept_channel(ch, WorkerIdInterceptor())
-    self._logging_stub = beam_fn_api_pb2_grpc.BeamFnLoggingStub(
-        self._log_channel)
     self._log_entry_queue = queue.Queue()
+    self._log_channel = None
+    self._logging_stub = None
 
-    log_control_messages = self._logging_stub.Logging(self._write_log_entries())
+    log_control_messages = self.create_channel(log_service_descriptor)
     self._reader = threading.Thread(
         target=lambda: self._read_log_control_messages(log_control_messages),
         name='read_log_control_messages')
     self._reader.daemon = True
     self._reader.start()
+
+  def create_channel(self, log_service_descriptor):
+    print >> sys.stderr, "creating logging channel"
+    ch = grpc.insecure_channel(log_service_descriptor.url)
+    grpc.channel_ready_future(ch).result(timeout=60)
+    self._log_channel = grpc.intercept_channel(ch, WorkerIdInterceptor())
+    self._logging_stub = beam_fn_api_pb2_grpc.BeamFnLoggingStub(
+        self._log_channel)
+
+    return self._logging_stub.Logging(self._write_log_entries())
+
 
   def emit(self, record):
     log_entry = beam_fn_api_pb2.LogEntry()
@@ -97,6 +105,14 @@ class FnApiLogRecordHandler(logging.Handler):
     # Unregister this handler.
     super(FnApiLogRecordHandler, self).close()
 
+
+  def reset(self):
+    self.acquire()
+
+
+
+    self.release()
+
   def _write_log_entries(self):
     done = False
     while not done:
@@ -114,9 +130,7 @@ class FnApiLogRecordHandler(logging.Handler):
 
   def _read_log_control_messages(self, log_control_iterator):
     # TODO(vikasrk): Handle control messages.
-    try:
-      for _ in log_control_iterator:
-        pass
-    except Exception as ex:
-       print >> sys.stderr, "Failed to read control messages: {}".format(ex)
+    for _ in log_control_iterator:
+      pass
+
 
