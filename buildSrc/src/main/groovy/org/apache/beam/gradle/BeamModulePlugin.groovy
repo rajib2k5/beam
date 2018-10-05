@@ -324,7 +324,7 @@ class BeamModulePlugin implements Plugin<Project> {
     def bigtable_version = "1.4.0"
     def google_clients_version = "1.24.1"
     def google_auth_version = "0.10.0"
-    def grpc_version = "1.13.1"
+    def grpc_version = "1.15.1"
     def protobuf_version = "3.6.0"
     def guava_version = "20.0"
     def netty_version = "4.1.25.Final"
