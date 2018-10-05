@@ -20,6 +20,8 @@ from __future__ import absolute_import
 
 import logging
 import math
+import sys
+
 import queue
 import threading
 from builtins import range
@@ -55,6 +57,7 @@ class FnApiLogRecordHandler(logging.Handler):
 
   def __init__(self, log_service_descriptor):
     super(FnApiLogRecordHandler, self).__init__()
+    print >> sys.stderr, "initializing logging thing"
     # Make sure the channel is ready to avoid [BEAM-4649]
     ch = grpc.insecure_channel(log_service_descriptor.url)
     grpc.channel_ready_future(ch).result(timeout=60)
@@ -111,5 +114,9 @@ class FnApiLogRecordHandler(logging.Handler):
 
   def _read_log_control_messages(self, log_control_iterator):
     # TODO(vikasrk): Handle control messages.
-    for _ in log_control_iterator:
-      pass
+    try:
+      for _ in log_control_iterator:
+        pass
+    except Exception as ex:
+       print >> sys.stderr, "Failed to read control messages: {}".format(ex)
+

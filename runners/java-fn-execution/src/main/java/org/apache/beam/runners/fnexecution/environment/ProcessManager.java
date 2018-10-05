@@ -126,7 +126,7 @@ public class ProcessManager {
       if (System.getProperty("os.name", "").startsWith("Windows")) {
         pb.redirectOutput(new File("nul"));
       } else {
-        pb.redirectOutput(new File("/dev/null"));
+        pb.redirectOutput(new File("/tmp/output"));
       }
     }
 

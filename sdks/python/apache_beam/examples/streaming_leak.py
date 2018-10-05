@@ -53,6 +53,10 @@ def apply_timestamp(element):
     import apache_beam.transforms.window as window
     yield window.TimestampedValue(element, time.time())
 
+def log_aggressively(element):
+    logging.info("%s: %d" % element)
+
+
 def run(argv=None):
     """Build and run the pipeline."""
     runner = portable_runner.PortableRunner()
@@ -70,17 +74,17 @@ def run(argv=None):
     messages = (p | TestInput())
 
     (messages | 'decode' >> beam.Map(lambda x: x.decode('utf-8'))
-              # | 'window' >> beam.WindowInto(window.GlobalWindows(),
-              #                               trigger=Repeatedly(AfterProcessingTime(15 * 1000)),
-              #                               accumulation_mode=AccumulationMode.DISCARDING)
-              | 'timestamp' >> beam.FlatMap(apply_timestamp)
-              | 'window' >> beam.WindowInto(window.FixedWindows(15),
-                                            trigger=AfterProcessingTime(20 * 1000),
+              | 'window' >> beam.WindowInto(window.GlobalWindows(),
+                                            trigger=Repeatedly(AfterProcessingTime(15000)),
                                             accumulation_mode=AccumulationMode.DISCARDING)
+              | 'timestamp' >> beam.FlatMap(apply_timestamp)
+              # | 'window' >> beam.WindowInto(window.FixedWindows(15),
+              #                               trigger=AfterProcessingTime(20 * 1000),
+              #                               accumulation_mode=AccumulationMode.DISCARDING)
               | 'split' >> beam.Map(split)
               | 'group' >> beam.GroupByKey()
               | 'count' >> beam.Map(find_largest)
-              | 'log' >> beam.Map(lambda x: logging.info("%s: %d" % x)))
+              | 'log' >> beam.Map(log_aggressively))
 
     result = p.run()
     result.wait_until_finish()

@@ -52,7 +52,7 @@ public class TestStreamingPortableTranslation {
                   counter++;
                   ctx.collect(WindowedValue.valueInGlobalWindow(
                       value.getBytes(Charset.forName("UTF-8"))));
-                  Thread.sleep(10);
+                  Thread.sleep(100);
                 }
               }
 
