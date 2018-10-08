@@ -55,17 +55,15 @@ def apply_timestamp(element):
 
 def run(argv=None):
     """Build and run the pipeline."""
-    runner = portable_runner.PortableRunner()
     options_string = sys.argv.extend([
-      "--experiments=beam_fn_api",
-      "--sdk_location=container",
+      "--runner=PortableRunner",
       "--job_endpoint=localhost:8099",
       "--streaming"
     ])
 
     pipeline_options = PipelineOptions(options_string)
 
-    p = beam.Pipeline(runner=runner, options=pipeline_options)
+    p = beam.Pipeline(options=pipeline_options)
 
     messages = (p | TestInput())
 
