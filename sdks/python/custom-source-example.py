@@ -5,15 +5,13 @@ from apache_beam.io import ReadFromText
 from apache_beam.io.lyft.kafka import FlinkKafkaInput
 from apache_beam.io.lyft.kinesis import FlinkKinesisInput
 from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.runners.portability import portable_runner
 
 
 if __name__ == "__main__":
-  runner = portable_runner.PortableRunner()
   options_string = sys.argv.extend([
-      "--experiments=beam_fn_api",
-      "--sdk_location=container",
+      "--runner=PortableRunner",
       "--job_endpoint=localhost:8099",
+      "--parallelism=1",
       "--streaming"
   ])
   pipeline_options = PipelineOptions(options_string)
@@ -25,7 +23,7 @@ if __name__ == "__main__":
   # aws kinesis put-record --endpoint-url http://localhost:4567/ --stream-name beam-example --partition-key 123 --data 'count the words'
   # export AWS_CBOR_DISABLE=1
 
-  with beam.Pipeline(runner=runner, options=pipeline_options) as p:
+  with beam.Pipeline(options=pipeline_options) as p:
     (p
         # | 'Create' >> beam.Create(['hello', 'world', 'world'])
         # | 'Read' >> ReadFromText("gs://dataflow-samples/shakespeare/kinglear.txt")
@@ -35,6 +33,7 @@ if __name__ == "__main__":
         #                .with_output_types(unicode))
         #| 'PairWithOne' >> beam.Map(lambda x: (x, 1))
         #| 'GroupAndSum' >> beam.CombinePerKey(sum)
-        | beam.Map(lambda x: logging.info("Got record: %s", x) or (x, 1)))
+        | beam.Map(lambda x: logging.info("Got record: %s", x) or (x, 1))
+     )
 
 
