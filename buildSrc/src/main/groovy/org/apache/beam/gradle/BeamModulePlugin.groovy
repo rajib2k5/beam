@@ -574,7 +574,7 @@ class BeamModulePlugin implements Plugin<Project> {
         options.compilerArgs += ([
           '-parameters',
           '-Xlint:all',
-          '-Werror',
+          //'-Werror',
           '-XepDisableWarningsInGeneratedCode',
           '-XepExcludedPaths:(.*/)?(build/generated.*avro-java|build/generated)/.*',
           '-Xep:MutableConstantField:OFF' // Guava's immutable collections cannot appear on API surface.
