@@ -124,7 +124,7 @@ public class FlinkExecutionEnvironments {
     LOG.info("env: {}", System.getenv());
 
     String masterUrl = options.getFlinkMaster();
-    StreamExecutionEnvironment flinkStreamEnv = null;
+    final StreamExecutionEnvironment flinkStreamEnv;
 
     // depending on the master, create the right environment.
     if ("[local]".equals(masterUrl)) {
@@ -165,6 +165,9 @@ public class FlinkExecutionEnvironments {
     } else {
       flinkStreamEnv.getConfig().disableObjectReuse();
     }
+
+    // WIP: https://issues.apache.org/jira/browse/BEAM-5713
+    flinkStreamEnv.disableOperatorChaining();
 
     // default to event time
     flinkStreamEnv.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
