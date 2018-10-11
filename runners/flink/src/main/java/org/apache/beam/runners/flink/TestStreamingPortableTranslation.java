@@ -4,6 +4,7 @@ import com.google.auto.service.AutoService;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import java.nio.charset.Charset;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.beam.model.pipeline.v1.RunnerApi;
 import org.apache.beam.runners.core.construction.NativeTransforms;
@@ -64,7 +65,7 @@ public class TestStreamingPortableTranslation {
                     cancelled.set(true);
                   }
                 });
-
+    source.slotSharingGroup(UUID.randomUUID().toString());
     context.addDataStream(Iterables.getOnlyElement(pTransform.getOutputsMap().values()), source);
   }
 }
