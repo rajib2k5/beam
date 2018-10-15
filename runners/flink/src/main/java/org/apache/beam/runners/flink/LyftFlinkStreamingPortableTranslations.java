@@ -166,7 +166,7 @@ public class LyftFlinkStreamingPortableTranslations {
             properties, stream, context.getExecutionEnvironment().getConfig().getParallelism()));
     context.addDataStream(
         Iterables.getOnlyElement(pTransform.getOutputsMap().values()),
-        context.getExecutionEnvironment().addSource(source));
+        context.getExecutionEnvironment().addSource(source).map((f) -> f).returns(new KinesisByteArrayWindowedValueSchema().ti));
   }
 
   /**
