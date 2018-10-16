@@ -54,7 +54,7 @@ public class FlinkJobServerDriver implements Runnable {
   /** Configuration for the jobServer. */
   public static class ServerConfiguration {
     @Option(name = "--job-host", usage = "The job server host name")
-    private String host = "";
+    private String host = "localhost";
 
     @Option(
       name = "--job-port",
