@@ -162,13 +162,14 @@ public class ExecutableStageDoFnOperator<InputT, OutputT> extends DoFnOperator<I
 
   @Override
   public void dispose() throws Exception {
-    // DoFnOperator generates another "bundle" for the final watermark
-    super.dispose();
     // Remove the reference to stageContext and make stageContext available for garbage collection.
     try (@SuppressWarnings("unused")
             AutoCloseable bundleFactoryCloser = stageBundleFactory;
         @SuppressWarnings("unused")
-            AutoCloseable closable = stageContext) {}
+            AutoCloseable closable = stageContext) {
+      // DoFnOperator generates another "bundle" for the final watermark -- see BEAM-5816 for more context
+      super.dispose();
+    }
     stageContext = null;
   }
 
@@ -215,15 +216,15 @@ public class ExecutableStageDoFnOperator<InputT, OutputT> extends DoFnOperator<I
 
     @Override
     public void processElement(WindowedValue<InputT> element) {
+      checkState(remoteBundle != null, "%s not yet prepared", RemoteBundle.class.getName());
       try {
-        checkState(remoteBundle != null, "%s not yet prepared", RemoteBundle.class.getName());
         LOG.debug(String.format("Sending value: %s", element));
         // TODO(BEAM-4681): Add support to Flink to support portable timers.
         Iterables.getOnlyElement(remoteBundle.getInputReceivers().values()).accept(element);
-        emitResults();
       } catch (Exception e) {
-        throw new RuntimeException(e);
+        throw new RuntimeException("Failed to process element with SDK harness.", e);
       }
+      emitResults();
     }
 
     @Override
