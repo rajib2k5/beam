@@ -16,17 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.beam.runners.dataflow.harness.util;
+import CommonJobProperties as commonJobProperties
 
-import java.util.function.Consumer;
+job('beam_Prober_CommunityMetrics') {
+  description('Health check probes for the Community Metrics infrastructure')
+ commonJobProperties.setTopLevelMainJobProperties(delegate)
 
-/**
- * A {@link Consumer} which can throw {@link Exception}s.
- *
- * <p>Used to expand the allowed set of method references to be used by Java 8 functional
- * interfaces.
- */
-@FunctionalInterface
-public interface ThrowingConsumer<T> {
-  void accept(T t) throws Exception;
+ commonJobProperties.enablePhraseTriggeringFromPullRequest(delegate,
+     'Community Metrics Prober',
+     'Run Community Metrics Prober')
+
+ commonJobProperties.setAutoJob(delegate)
+
+ commonJobProperties.enablePhraseTriggeringFromPullRequest(
+         delegate,
+         'Community Metrics Prober',
+         'Run Community Metrics Prober')
+
+  // Gradle goals for this job.
+  steps {
+    gradle {
+      rootBuildScriptDir(commonJobProperties.checkoutDir)
+      tasks(':communityMetricsProber')
+      commonJobProperties.setGradleSwitches(delegate)
+    }
+  }
 }

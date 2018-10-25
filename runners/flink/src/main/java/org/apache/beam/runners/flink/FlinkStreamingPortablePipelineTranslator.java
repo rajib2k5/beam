@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import org.apache.beam.model.pipeline.v1.RunnerApi;
@@ -52,6 +53,7 @@ import org.apache.beam.runners.flink.translation.types.CoderTypeInformation;
 import org.apache.beam.runners.flink.translation.utils.FlinkPipelineTranslatorUtils;
 import org.apache.beam.runners.flink.translation.wrappers.streaming.DoFnOperator;
 import org.apache.beam.runners.flink.translation.wrappers.streaming.ExecutableStageDoFnOperator;
+import org.apache.beam.runners.flink.translation.wrappers.streaming.KvToByteBufferKeySelector;
 import org.apache.beam.runners.flink.translation.wrappers.streaming.SingletonKeyedWorkItem;
 import org.apache.beam.runners.flink.translation.wrappers.streaming.SingletonKeyedWorkItemCoder;
 import org.apache.beam.runners.flink.translation.wrappers.streaming.WindowDoFnOperator;
@@ -431,10 +433,13 @@ public class FlinkStreamingPortablePipelineTranslator
       String id, RunnerApi.Pipeline pipeline, StreamingTranslationContext context) {
     RunnerApi.PTransform pTransform = pipeline.getComponents().getTransformsOrThrow(id);
 
-    ObjectMapper objectMapper = new ObjectMapper();
+    TypeInformation<WindowedValue<byte[]>> typeInfo =
+        new CoderTypeInformation<>(
+            WindowedValue.getFullCoder(ByteArrayCoder.of(), GlobalWindow.Coder.INSTANCE));
 
-    int intervalMillis;
-    int messageCount;
+    ObjectMapper objectMapper = new ObjectMapper();
+    final int intervalMillis;
+    final int messageCount;
     try {
       JsonNode config = objectMapper.readTree(pTransform.getSpec().getPayload().toByteArray());
       intervalMillis = config.path("interval_ms").asInt(100);
@@ -443,10 +448,11 @@ public class FlinkStreamingPortablePipelineTranslator
       throw new RuntimeException("Failed to parse configuration for streaming impulse", e);
     }
 
-    DataStreamSource<WindowedValue<byte[]>> source =
+    SingleOutputStreamOperator<WindowedValue<byte[]>> source =
         context
             .getExecutionEnvironment()
-            .addSource(new StreamingImpulseSource(intervalMillis, messageCount));
+            .addSource(new StreamingImpulseSource(intervalMillis, messageCount))
+            .returns(typeInfo);
 
     context.addDataStream(Iterables.getOnlyElement(pTransform.getOutputsMap().values()), source);
   }
@@ -555,6 +561,29 @@ public class FlinkStreamingPortablePipelineTranslator
       }
     }
 
+    final Coder<WindowedValue<InputT>> windowedInputCoder =
+        instantiateCoder(inputPCollectionId, components);
+
+    Coder keyCoder = null;
+    KeySelector<WindowedValue<InputT>, ?> keySelector = null;
+    final boolean stateful = stagePayload.getUserStatesCount() > 0;
+    if (stateful) {
+      // Stateful stages are only allowed of KV input
+      Coder valueCoder =
+          ((WindowedValue.FullWindowedValueCoder) windowedInputCoder).getValueCoder();
+      if (!(valueCoder instanceof KvCoder)) {
+        throw new IllegalStateException(
+            String.format(
+                Locale.ENGLISH,
+                "The element coder for stateful DoFn '%s' must be KvCoder but is: %s",
+                inputPCollectionId,
+                valueCoder.getClass().getSimpleName()));
+      }
+      keyCoder = ((KvCoder) valueCoder).getKeyCoder();
+      keySelector = new KvToByteBufferKeySelector(keyCoder);
+      inputDataStream = inputDataStream.keyBy(keySelector);
+    }
+
     DoFnOperator.MultiOutputOutputManagerFactory<OutputT> outputManagerFactory =
         new DoFnOperator.MultiOutputOutputManagerFactory<>(
             mainOutputTag, tagsToOutputTags, tagsToCoders, tagsToIds);
@@ -562,7 +591,7 @@ public class FlinkStreamingPortablePipelineTranslator
     DoFnOperator<InputT, OutputT> doFnOperator =
         new ExecutableStageDoFnOperator<>(
             transform.getUniqueName(),
-            instantiateCoder(inputPCollectionId, components),
+            windowedInputCoder,
             null,
             Collections.emptyMap(),
             mainOutputTag,
@@ -575,7 +604,9 @@ public class FlinkStreamingPortablePipelineTranslator
             stagePayload,
             context.getJobInfo(),
             FlinkExecutableStageContext.factory(context.getPipelineOptions()),
-            collectionIdToTupleTag);
+            collectionIdToTupleTag,
+            keyCoder,
+            keySelector);
 
     if (transformedSideInputs.unionTagToView.isEmpty()) {
       outputStream =

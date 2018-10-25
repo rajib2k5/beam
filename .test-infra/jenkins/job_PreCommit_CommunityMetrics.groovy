@@ -16,17 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.beam.runners.dataflow.harness.util;
+import PrecommitJobBuilder
 
-import java.util.function.BiConsumer;
+PrecommitJobBuilder builder = new PrecommitJobBuilder(
+    scope: this,
+    nameBase: 'Community Metrics',
+    gradleTask: ':communityMetricsPreCommit',
+    triggerPathPatterns: ['^.test-infra/metrics/.*$']
+)
+builder.build()
 
-/**
- * A {@link BiConsumer} which can throw {@link Exception}s.
- *
- * <p>Used to expand the allowed set of method references to be used by Java 8 functional
- * interfaces.
- */
-@FunctionalInterface
-public interface ThrowingBiConsumer<T1, T2> {
-  void accept(T1 t1, T2 t2) throws Exception;
-}

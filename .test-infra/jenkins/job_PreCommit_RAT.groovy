@@ -16,17 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.beam.runners.dataflow.harness.util;
+import PrecommitJobBuilder
 
-import java.util.function.BiFunction;
-
-/**
- * A {@link BiFunction} which can throw {@link Exception}s.
- *
- * <p>Used to expand the allowed set of method references to be used by Java 8 functional
- * interfaces.
- */
-@FunctionalInterface
-public interface ThrowingBiFunction<T1, T2, T3> {
-  T3 apply(T1 t1, T2 t2) throws Exception;
-}
+PrecommitJobBuilder builder = new PrecommitJobBuilder(
+    scope: this,
+    nameBase: 'RAT',
+    gradleTask: ':rat'
+)
+builder.build()
