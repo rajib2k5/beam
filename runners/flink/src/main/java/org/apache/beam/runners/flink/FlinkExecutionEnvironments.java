@@ -105,6 +105,10 @@ public class FlinkExecutionEnvironments {
 
     applyLatencyTrackingInterval(flinkBatchEnv.getConfig(), options);
 
+    if (options.getAutoWatermarkInterval() != null) {
+      flinkBatchEnv.getConfig().setAutoWatermarkInterval(options.getAutoWatermarkInterval());
+    }
+
     return flinkBatchEnv;
   }
 
@@ -221,6 +225,10 @@ public class FlinkExecutionEnvironments {
     }
 
     applyLatencyTrackingInterval(flinkStreamEnv.getConfig(), options);
+
+    if (options.getAutoWatermarkInterval() != null) {
+      flinkStreamEnv.getConfig().setAutoWatermarkInterval(options.getAutoWatermarkInterval());
+    }
 
     // State backend
     final StateBackend stateBackend = options.getStateBackend();
