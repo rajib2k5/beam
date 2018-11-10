@@ -64,6 +64,7 @@ import org.apache.beam.sdk.values.TupleTag;
 import org.apache.beam.sdk.values.WindowingStrategy;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.runtime.state.KeyedStateBackend;
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
@@ -302,6 +303,15 @@ public class ExecutableStageDoFnOperator<InputT, OutputT> extends DoFnOperator<I
   }
 
   @Override
+  public void processWatermark(Watermark mark) throws Exception {
+    if (remoteBundle != null) {
+      // finish bundle to emit results before the watermark
+      super.invokeFinishBundle();
+    }
+    super.processWatermark(mark);
+  }
+
+  @Override
   protected DoFnRunner<InputT, OutputT> createWrappingDoFnRunner(
       DoFnRunner<InputT, OutputT> wrappedRunner) {
     return new SdkHarnessDoFnRunner();
@@ -356,6 +366,7 @@ public class ExecutableStageDoFnOperator<InputT, OutputT> extends DoFnOperator<I
         // TODO: it would be nice to emit results as they arrive, can thread wait non-blocking?
         // close blocks until all results are received
         remoteBundle.close();
+        remoteBundle = null;
         emitResults();
       } catch (Exception e) {
         throw new RuntimeException("Failed to finish remote bundle", e);

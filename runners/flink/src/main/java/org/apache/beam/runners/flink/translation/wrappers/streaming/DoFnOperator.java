@@ -669,7 +669,7 @@ public class DoFnOperator<InputT, OutputT> extends AbstractStreamOperator<Window
     }
   }
 
-  private void invokeFinishBundle() {
+  protected void invokeFinishBundle() {
     if (bundleStarted) {
       pushbackDoFnRunner.finishBundle();
       bundleStarted = false;
