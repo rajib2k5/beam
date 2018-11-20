@@ -39,7 +39,7 @@ public class ProcessManager {
   private static final Logger LOG = LoggerFactory.getLogger(ProcessManager.class);
 
   /** For debugging purposes, we inherit I/O of processes. */
-  private static final boolean INHERIT_IO = LOG.isDebugEnabled();
+  private static final boolean INHERIT_IO = true; //LOG.isDebugEnabled();
 
   /** A list of all managers to ensure all processes shutdown on JVM exit . */
   private static final List<ProcessManager> ALL_PROCESS_MANAGERS = new ArrayList<>();
