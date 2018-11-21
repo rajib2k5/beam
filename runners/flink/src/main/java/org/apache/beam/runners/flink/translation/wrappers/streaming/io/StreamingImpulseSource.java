@@ -17,9 +17,17 @@
  */
 package org.apache.beam.runners.flink.translation.wrappers.streaming.io;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.beam.sdk.util.WindowedValue;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
+import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
+import org.apache.flink.streaming.api.watermark.Watermark;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeCallback;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
+import org.apache.flink.util.Preconditions;
+import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +48,46 @@ public class StreamingImpulseSource extends RichParallelSourceFunction<WindowedV
     this.messageCount = messageCount;
   }
 
+  private static class PeriodicWatermarkEmitter implements ProcessingTimeCallback {
+
+    private final ProcessingTimeService timerService;
+    private final long interval;
+    private final SourceContext<?> context;
+    private long lastWatermark = Long.MIN_VALUE;
+    private long watermark = Long.MIN_VALUE;
+
+    PeriodicWatermarkEmitter(ProcessingTimeService timerService, SourceContext<?> context, long autoWatermarkInterval) {
+      this.timerService = checkNotNull(timerService);
+      this.context = context;
+      this.interval = autoWatermarkInterval;
+    }
+
+    @SuppressWarnings("FutureReturnValueIgnored")
+    public void start() {
+      LOG.debug("registering periodic watermark timer with interval {}", interval);
+      timerService.registerTimer(timerService.getCurrentProcessingTime() + interval, this);
+    }
+
+    public void setWatermark(long newWatermark) {
+      Preconditions.checkArgument(newWatermark> this.watermark);
+      this.watermark = newWatermark;
+    }
+
+    @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
+    public void onProcessingTime(long timestamp) {
+      if (watermark != lastWatermark) {
+        synchronized (context.getCheckpointLock()) {
+          context.emitWatermark(new Watermark(watermark));
+        }
+        lastWatermark = watermark;
+      }
+
+      // schedule the next watermark
+      timerService.registerTimer(timerService.getCurrentProcessingTime() + interval, this);
+    }
+  }
+
   @Override
   public void run(SourceContext<WindowedValue<byte[]>> ctx) {
     // in order to produce messageCount messages across all parallel subtasks, we divide by
@@ -52,9 +100,17 @@ public class StreamingImpulseSource extends RichParallelSourceFunction<WindowedV
       subtaskCount++;
     }
 
+    ProcessingTimeService timerService =
+        ((StreamingRuntimeContext) getRuntimeContext()).getProcessingTimeService();
+    PeriodicWatermarkEmitter emitter = new PeriodicWatermarkEmitter(timerService, ctx, 100);
+
+    emitter.start();
+
     while (!cancelled.get() && (messageCount == 0 || count < subtaskCount)) {
       synchronized (ctx.getCheckpointLock()) {
-        ctx.collect(WindowedValue.valueInGlobalWindow(new byte[] {}));
+        Instant now = Instant.now();
+        ctx.collect(WindowedValue.timestampedValueInGlobalWindow(new byte[] {}, now));
+        emitter.setWatermark(now.getMillis());
         count++;
       }
 
