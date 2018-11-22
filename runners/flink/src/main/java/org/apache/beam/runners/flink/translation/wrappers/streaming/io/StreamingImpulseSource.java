@@ -20,6 +20,7 @@ package org.apache.beam.runners.flink.translation.wrappers.streaming.io;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.beam.sdk.util.WindowedValue;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +55,12 @@ public class StreamingImpulseSource extends RichParallelSourceFunction<WindowedV
 
     while (!cancelled.get() && (messageCount == 0 || count < subtaskCount)) {
       synchronized (ctx.getCheckpointLock()) {
-        ctx.collect(WindowedValue.valueInGlobalWindow(new byte[] {}));
+        //ctx.collect(WindowedValue.valueInGlobalWindow(new byte[] {}));
+        long timestamp = count * 1000;
+        ctx.collect(WindowedValue.timestampedValueInGlobalWindow(new byte[] {}, new org.joda.time.Instant(timestamp)));
+        if (count > 1 && count % 10 == 0) {
+          ctx.emitWatermark(new Watermark(timestamp));
+        }
         count++;
       }
 
@@ -65,6 +71,17 @@ public class StreamingImpulseSource extends RichParallelSourceFunction<WindowedV
       } catch (InterruptedException e) {
         LOG.warn("Interrupted while sleeping", e);
       }
+    }
+
+    //ctx.emitWatermark(new Watermark(((count + 1) * 1000)));
+    //ctx.emitWatermark(new Watermark(100_000_000));
+    //ctx.emitWatermark(new Watermark(100_000_001));
+    // no result appears unless we send this final mark
+    //ctx.emitWatermark(new Watermark(Long.MAX_VALUE));
+    try {
+      Thread.sleep(30_000);
+    } catch (InterruptedException e) {
+      LOG.warn("Interrupted while sleeping", e);
     }
   }
 

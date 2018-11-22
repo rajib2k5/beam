@@ -49,18 +49,27 @@ def apply_timestamp(element):
   yield window.TimestampedValue(element, time.time())
 
 
+class PrintDoFn(beam.DoFn):
+  def process(self, element, window=beam.DoFn.WindowParam, timestamp=beam.DoFn.TimestampParam):
+    #print(element)
+    logging.warn (str(element) + ' : ' + str(window.start) + '-' + str(window.end) + ' : ' + str(timestamp))
+    yield element
+
+
 def run(argv=None):
   """Build and run the pipeline."""
   args = ["--runner=PortableRunner",
           "--job_endpoint=localhost:8099",
-          "--streaming"]
+          "--streaming",
+          "--parallelism=1",
+          "--NOmax_bundle_size=1"]
   if argv:
     args.extend(argv)
 
   parser = argparse.ArgumentParser()
   parser.add_argument('--count',
                       dest='count',
-                      default=0,
+                      default=100,
                       help='Number of triggers to generate '
                            '(0 means emit forever).')
   parser.add_argument('--interval_ms',
@@ -79,15 +88,21 @@ def run(argv=None):
               .set_message_count(known_args.count)
               .set_interval_ms(known_args.interval_ms))
 
-  _ = (messages | 'decode' >> beam.Map(lambda x: ('', 1))
-       | 'window' >> beam.WindowInto(window.GlobalWindows(),
-                                     trigger=Repeatedly(
-                                         AfterProcessingTime(5 * 1000)),
-                                     accumulation_mode=
-                                     AccumulationMode.DISCARDING)
+  _ = (messages | 'decode' >> beam.Map(lambda x: ('', 2))
+       #| 'window' >> beam.WindowInto(window.GlobalWindows(),
+       #                              trigger=Repeatedly(
+       #                                  AfterProcessingTime(5 * 1000)),
+       #                              accumulation_mode=
+       #                              AccumulationMode.DISCARDING)
+       | 'FixedWindow' >> beam.WindowInto(beam.window.FixedWindows(10))
+       | 'print_element' >> beam.ParDo(PrintDoFn())
        | 'group' >> beam.GroupByKey()
+       | 'print_group' >> beam.ParDo(PrintDoFn())
        | 'count' >> beam.Map(count)
-       | 'log' >> beam.Map(lambda x: logging.info("%d" % x[1])))
+       | 'print_count' >> beam.ParDo(PrintDoFn())
+       | 'group2' >> beam.GroupByKey()
+       | 'print_group2' >> beam.ParDo(PrintDoFn())
+       | 'log' >> beam.Map(lambda x: logging.info("RESULT %s" % x[1]) or x))
 
   result = p.run()
   result.wait_until_finish()

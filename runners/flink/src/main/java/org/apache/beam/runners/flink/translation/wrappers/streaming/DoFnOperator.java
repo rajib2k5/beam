@@ -537,6 +537,7 @@ public class DoFnOperator<InputT, OutputT> extends AbstractStreamOperator<Window
 
   @Override
   public void processWatermark(Watermark mark) throws Exception {
+    System.out.println("###processWatermark [" + this.getOperatorName() + "]:" + mark);
     processWatermark1(mark);
   }
 
@@ -588,6 +589,7 @@ public class DoFnOperator<InputT, OutputT> extends AbstractStreamOperator<Window
     if (watermark >= BoundedWindow.TIMESTAMP_MAX_VALUE.getMillis()) {
       invokeFinishBundle();
     }
+    System.out.println("###emitWatermark [" + this.getOperatorName() + "]:" + new Watermark(watermark));
     output.emitWatermark(new Watermark(watermark));
   }
 
