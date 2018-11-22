@@ -19,7 +19,9 @@ package org.apache.beam.runners.flink.translation.wrappers.streaming.io;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.nio.charset.Charset;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.beam.sdk.util.WindowedValue;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
@@ -42,6 +44,7 @@ public class StreamingImpulseSource extends RichParallelSourceFunction<WindowedV
   private long count = 0;
   private final int intervalMillis;
   private final int messageCount;
+  private static final AtomicLong globalCount = new AtomicLong();
 
   public StreamingImpulseSource(int intervalMillis, int messageCount) {
     this.intervalMillis = intervalMillis;
@@ -56,7 +59,8 @@ public class StreamingImpulseSource extends RichParallelSourceFunction<WindowedV
     private long lastWatermark = Long.MIN_VALUE;
     private long watermark = Long.MIN_VALUE;
 
-    PeriodicWatermarkEmitter(ProcessingTimeService timerService, SourceContext<?> context, long autoWatermarkInterval) {
+    PeriodicWatermarkEmitter(
+        ProcessingTimeService timerService, SourceContext<?> context, long autoWatermarkInterval) {
       this.timerService = checkNotNull(timerService);
       this.context = context;
       this.interval = autoWatermarkInterval;
@@ -69,7 +73,7 @@ public class StreamingImpulseSource extends RichParallelSourceFunction<WindowedV
     }
 
     public void setWatermark(long newWatermark) {
-      Preconditions.checkArgument(newWatermark> this.watermark);
+      Preconditions.checkArgument(newWatermark > this.watermark);
       this.watermark = newWatermark;
     }
 
@@ -106,12 +110,17 @@ public class StreamingImpulseSource extends RichParallelSourceFunction<WindowedV
 
     emitter.start();
 
-    while (!cancelled.get() && (messageCount == 0 || count < subtaskCount)) {
-      synchronized (ctx.getCheckpointLock()) {
-        Instant now = Instant.now();
-        ctx.collect(WindowedValue.timestampedValueInGlobalWindow(new byte[] {}, now));
-        emitter.setWatermark(now.getMillis());
-        count++;
+    while (!cancelled.get()) {
+      if (messageCount == 0 || count < subtaskCount) {
+        synchronized (ctx.getCheckpointLock()) {
+          Instant now = Instant.now();
+          ctx.collect(
+              WindowedValue.timestampedValueInGlobalWindow(
+                  Long.toString(globalCount.getAndIncrement()).getBytes(Charset.defaultCharset()),
+                  now));
+          emitter.setWatermark(now.getMillis());
+          count++;
+        }
       }
 
       try {
