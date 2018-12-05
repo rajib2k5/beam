@@ -329,6 +329,8 @@ public class LyftFlinkStreamingPortableTranslations {
         try {
           if (occurredAt.isTextual()) {
             timestamp = Math.min(parseDateTime(occurredAt.textValue()), timestamp);
+          } else if (occurredAt.isNumber()) {
+            timestamp = occurredAt.asLong();
           }
         } catch (DateTimeParseException e) {
           // skip this timestamp

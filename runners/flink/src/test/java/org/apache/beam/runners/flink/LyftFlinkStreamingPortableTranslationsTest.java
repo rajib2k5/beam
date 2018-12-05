@@ -43,6 +43,21 @@ public class LyftFlinkStreamingPortableTranslationsTest {
   }
 
   @Test
+  public void testBeamKinesisSchemaLongTimestamp() throws IOException {
+    // [{"event_id": 1, "occurred_at": "2018-10-27 00:20:02.900"}]"
+    byte[] message =
+        Base64.getDecoder()
+            .decode(
+                "eJyLrlZKLUvNK4nPTFGyUjDUUVDKT04uL" + "SpKTYlPLAGJmJqYGBhbGlsYmhlZ1MYCAGYeDek=");
+
+    LyftBase64ZlibJsonSchema schema = new LyftBase64ZlibJsonSchema();
+    WindowedValue<byte[]> value = schema.deserialize(message, "", "", 0, "", "");
+
+    Assert.assertArrayEquals(message, value.getValue());
+    Assert.assertEquals(1544039381628L, value.getTimestamp().getMillis());
+  }
+
+  @Test
   public void testBeamKinesisSchemaNoTimestamp() throws IOException {
     // [{"event_id": 1}]
     byte[] message = Base64.getDecoder().decode("eJyLrlZKLUvNK4nPTFGyUjCsjQUANv8Fzg==");
