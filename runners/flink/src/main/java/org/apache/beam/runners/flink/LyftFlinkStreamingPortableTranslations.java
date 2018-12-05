@@ -119,7 +119,8 @@ public class LyftFlinkStreamingPortableTranslations {
             .getExecutionEnvironment()
             .addSource(
                 new FlinkKafkaConsumer010<>(topic, new ByteArrayWindowedValueSchema(), properties)
-                    .setStartFromLatest());
+                    .setStartFromLatest(),
+                FlinkKafkaConsumer010.class.getSimpleName());
     context.addDataStream(Iterables.getOnlyElement(pTransform.getOutputsMap().values()), source);
   }
 
@@ -220,7 +221,9 @@ public class LyftFlinkStreamingPortableTranslations {
             properties, stream, context.getExecutionEnvironment().getConfig().getParallelism()));
     context.addDataStream(
         Iterables.getOnlyElement(pTransform.getOutputsMap().values()),
-        context.getExecutionEnvironment().addSource(source));
+        context
+            .getExecutionEnvironment()
+            .addSource(source, FlinkLyftKinesisConsumer.class.getSimpleName()));
   }
 
   /**
