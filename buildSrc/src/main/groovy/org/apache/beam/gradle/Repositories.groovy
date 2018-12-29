@@ -55,7 +55,7 @@ class Repositories {
       //LYFT CUSTOM pull in the central repo override from settings, if any
       def settingsXml = new File(System.getProperty('user.home'), '.m2/settings.xml')
       if (settingsXml.exists()) {
-        def serverId = "central"
+        def serverId = "lyft-releases"
         def repo = new XmlSlurper().parse(settingsXml).'**'.find { n -> n.name() == 'repository' && serverId.equals(n.id.text()) }
         if (repo) {
           maven {
