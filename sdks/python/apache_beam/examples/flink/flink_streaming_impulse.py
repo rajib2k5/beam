@@ -80,6 +80,7 @@ def run(argv=None):
               .set_interval_ms(known_args.interval_ms))
 
   _ = (messages | 'decode' >> beam.Map(lambda x: ('', 1))
+       | 'reshuffle' >> beam.Reshuffle()
        | 'window' >> beam.WindowInto(window.GlobalWindows(),
                                      trigger=Repeatedly(
                                          AfterProcessingTime(5 * 1000)),
