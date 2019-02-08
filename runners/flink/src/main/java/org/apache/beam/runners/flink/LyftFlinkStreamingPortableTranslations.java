@@ -25,8 +25,6 @@ import static com.lyft.streamingplatform.analytics.EventUtils.ISO_DATETIME_FORMA
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.auto.service.AutoService;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Iterables;
 import com.lyft.streamingplatform.analytics.EventField;
 import com.lyft.streamingplatform.flink.FlinkLyftKinesisConsumer;
 import com.lyft.streamingplatform.flink.InitialRoundRobinKinesisShardAssigner;
@@ -51,7 +49,9 @@ import org.apache.beam.runners.flink.translation.types.CoderTypeInformation;
 import org.apache.beam.sdk.coders.ByteArrayCoder;
 import org.apache.beam.sdk.transforms.windowing.GlobalWindow;
 import org.apache.beam.sdk.util.WindowedValue;
+import org.apache.beam.vendor.guava.v20_0.com.google.common.base.Preconditions;
 import org.apache.beam.vendor.guava.v20_0.com.google.common.collect.ImmutableMap;
+import org.apache.beam.vendor.guava.v20_0.com.google.common.collect.Iterables;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
