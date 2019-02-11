@@ -321,6 +321,10 @@ public class LyftFlinkStreamingPortableTranslations {
         throw new IOException("Events is not an array");
       }
 
+      // Determine the timestamp as minimum occurred_at of all contained events.
+      // For each event, attempt to extract occurred_at from either date string or number.
+      // Assume timestamp as logged_at, when occurred_at is an (invalid) future timestamp.
+
       Iterator<JsonNode> iter = events.elements();
       long timestamp = Long.MAX_VALUE;
       while (iter.hasNext()) {
