@@ -340,9 +340,12 @@ public class LyftFlinkStreamingPortableTranslations {
             continue;
           }
           if (event.has(EventField.EventLoggedAt.fieldName())) {
-            long loggedAtSeconds = event.path(EventField.EventLoggedAt.fieldName()).asLong();
-            if (loggedAtSeconds > 0) {
-              occurredAtMillis = Math.min(occurredAtMillis, loggedAtSeconds * 1000);
+            long loggedAtMillis = event.path(EventField.EventLoggedAt.fieldName()).asLong();
+            if (loggedAtMillis > 0) {
+              if (loggedAtMillis < Integer.MAX_VALUE) {
+                loggedAtMillis = loggedAtMillis * 1000;
+              }
+              occurredAtMillis = Math.min(occurredAtMillis, loggedAtMillis);
             }
           }
           timestamp = Math.min(occurredAtMillis, timestamp);
