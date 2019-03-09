@@ -182,6 +182,8 @@ public class DoFnOperator<InputT, OutputT> extends AbstractStreamOperator<Window
   private transient long elementCount;
   private transient long lastFinishBundleTime;
   private transient ScheduledFuture<?> checkFinishBundleTimer;
+  /** Callback to be executed after the current bundle was finshed. */
+  private transient Runnable bundleFinishedCallback;
 
   public DoFnOperator(
       DoFn<InputT, OutputT> doFn,
@@ -456,6 +458,10 @@ public class DoFnOperator<InputT, OutputT> extends AbstractStreamOperator<Window
     pushedBackWatermark = watermark;
   }
 
+  protected void setBundleFinishedCallback(Runnable callback) {
+    this.bundleFinishedCallback = callback;
+  }
+
   @Override
   public final void processElement(StreamRecord<WindowedValue<InputT>> streamRecord) {
     checkInvokeStartBundle();
@@ -680,6 +686,12 @@ public class DoFnOperator<InputT, OutputT> extends AbstractStreamOperator<Window
       bundleStarted = false;
       elementCount = 0L;
       lastFinishBundleTime = getProcessingTimeService().getCurrentProcessingTime();
+      // callback only after current bundle was fully finalized
+      // it could start a new bundle, for example resulting from timer processing
+      if (bundleFinishedCallback != null) {
+        bundleFinishedCallback.run();
+        bundleFinishedCallback = null;
+      }
     }
   }
 
