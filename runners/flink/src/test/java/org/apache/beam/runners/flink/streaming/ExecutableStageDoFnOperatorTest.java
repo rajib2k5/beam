@@ -17,12 +17,13 @@
  */
 package org.apache.beam.runners.flink.streaming;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.collection.IsIterableContainingInOrder.contains;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -33,11 +34,15 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nullable;
 import org.apache.beam.model.pipeline.v1.RunnerApi.Components;
 import org.apache.beam.model.pipeline.v1.RunnerApi.ExecutableStagePayload;
 import org.apache.beam.model.pipeline.v1.RunnerApi.PCollection;
+import org.apache.beam.runners.core.StatefulDoFnRunner;
 import org.apache.beam.runners.flink.FlinkPipelineOptions;
+import org.apache.beam.runners.flink.metrics.DoFnRunnerWithMetricsUpdate;
 import org.apache.beam.runners.flink.translation.functions.FlinkExecutableStageContext;
+import org.apache.beam.runners.flink.translation.types.CoderTypeInformation;
 import org.apache.beam.runners.flink.translation.wrappers.streaming.DoFnOperator;
 import org.apache.beam.runners.flink.translation.wrappers.streaming.ExecutableStageDoFnOperator;
 import org.apache.beam.runners.fnexecution.control.BundleProgressHandler;
@@ -64,6 +69,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.util.KeyedOneInputStreamOperatorTestHarness;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.util.OutputTag;
 import org.junit.Before;
@@ -334,6 +340,38 @@ public class ExecutableStageDoFnOperatorTest {
   }
 
   @Test
+  public void testEnsureStateCleanupWithKeyedInput() throws Exception {
+    TupleTag<Integer> mainOutput = new TupleTag<>("main-output");
+    DoFnOperator.MultiOutputOutputManagerFactory<Integer> outputManagerFactory =
+        new DoFnOperator.MultiOutputOutputManagerFactory(mainOutput, VoidCoder.of());
+    VarIntCoder keyCoder = VarIntCoder.of();
+    ExecutableStageDoFnOperator<Integer, Integer> operator =
+        getOperator(mainOutput, Collections.emptyList(), outputManagerFactory, keyCoder);
+
+    KeyedOneInputStreamOperatorTestHarness<Integer, WindowedValue<Integer>, WindowedValue<Integer>>
+        testHarness =
+            new KeyedOneInputStreamOperatorTestHarness(
+                operator, val -> val, new CoderTypeInformation<>(keyCoder));
+
+    RemoteBundle bundle = Mockito.mock(RemoteBundle.class);
+    when(bundle.getInputReceivers())
+        .thenReturn(
+            ImmutableMap.<String, FnDataReceiver<WindowedValue>>builder()
+                .put("input", Mockito.mock(FnDataReceiver.class))
+                .build());
+    when(stageBundleFactory.getBundle(any(), any(), any())).thenReturn(bundle);
+
+    testHarness.open();
+
+    Object doFnRunner = Whitebox.getInternalState(operator, "doFnRunner");
+    assertThat(doFnRunner, instanceOf(DoFnRunnerWithMetricsUpdate.class));
+
+    // There should be a StatefulDoFnRunner installed which takes care of clearing state
+    Object statefulDoFnRunner = Whitebox.getInternalState(doFnRunner, "delegate");
+    assertThat(statefulDoFnRunner, instanceOf(StatefulDoFnRunner.class));
+  }
+
+  @Test
   public void testSerialization() {
     WindowedValue.ValueOnlyWindowedValueCoder<Integer> coder =
         WindowedValue.getValueOnlyCoder(VarIntCoder.of());
@@ -398,6 +436,14 @@ public class ExecutableStageDoFnOperatorTest {
       TupleTag<Integer> mainOutput,
       List<TupleTag<?>> additionalOutputs,
       DoFnOperator.MultiOutputOutputManagerFactory<Integer> outputManagerFactory) {
+    return getOperator(mainOutput, additionalOutputs, outputManagerFactory, null);
+  }
+
+  private ExecutableStageDoFnOperator<Integer, Integer> getOperator(
+      TupleTag<Integer> mainOutput,
+      List<TupleTag<?>> additionalOutputs,
+      DoFnOperator.MultiOutputOutputManagerFactory<Integer> outputManagerFactory,
+      @Nullable Coder keyCoder) {
 
     FlinkExecutableStageContext.Factory contextFactory =
         Mockito.mock(FlinkExecutableStageContext.Factory.class);
@@ -421,7 +467,7 @@ public class ExecutableStageDoFnOperatorTest {
             contextFactory,
             createOutputMap(mainOutput, additionalOutputs),
             WindowingStrategy.globalDefault(),
-            null,
+            keyCoder,
             null);
 
     Whitebox.setInternalState(operator, "stateRequestHandler", stateRequestHandler);

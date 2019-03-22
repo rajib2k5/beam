@@ -40,17 +40,20 @@ import org.apache.beam.model.fnexecution.v1.BeamFnApi.ProcessBundleResponse;
 import org.apache.beam.model.fnexecution.v1.BeamFnApi.StateKey.TypeCase;
 import org.apache.beam.model.pipeline.v1.RunnerApi;
 import org.apache.beam.runners.core.DoFnRunner;
+import org.apache.beam.runners.core.DoFnRunners;
+import org.apache.beam.runners.core.LateDataUtils;
 import org.apache.beam.runners.core.StateInternals;
 import org.apache.beam.runners.core.StateNamespace;
 import org.apache.beam.runners.core.StateNamespaces;
 import org.apache.beam.runners.core.StateTags;
+import org.apache.beam.runners.core.StatefulDoFnRunner;
 import org.apache.beam.runners.core.TimerInternals;
 import org.apache.beam.runners.core.construction.Timer;
 import org.apache.beam.runners.core.construction.graph.ExecutableStage;
+import org.apache.beam.runners.core.construction.graph.UserStateReference;
 import org.apache.beam.runners.flink.metrics.FlinkMetricContainer;
 import org.apache.beam.runners.flink.translation.functions.FlinkExecutableStageContext;
 import org.apache.beam.runners.flink.translation.functions.FlinkStreamingSideInputHandlerFactory;
-import org.apache.beam.runners.flink.translation.utils.NoopLock;
 import org.apache.beam.runners.fnexecution.control.BundleProgressHandler;
 import org.apache.beam.runners.fnexecution.control.OutputReceiverFactory;
 import org.apache.beam.runners.fnexecution.control.ProcessBundleDescriptors;
@@ -103,8 +106,7 @@ public class ExecutableStageDoFnOperator<InputT, OutputT> extends DoFnOperator<I
   private final FlinkExecutableStageContext.Factory contextFactory;
   private final Map<String, TupleTag<?>> outputMap;
   private final Map<RunnerApi.ExecutableStagePayload.SideInputId, PCollectionView<?>> sideInputIds;
-  private final boolean usesTimers;
-  /** A lock which has to be acquired when concurrently accessing state and setting timers. */
+  /** A lock which has to be acquired when concurrently accessing state and timers. */
   private final Lock stateBackendLock;
 
   private transient FlinkExecutableStageContext stageContext;
@@ -155,19 +157,7 @@ public class ExecutableStageDoFnOperator<InputT, OutputT> extends DoFnOperator<I
     this.contextFactory = contextFactory;
     this.outputMap = outputMap;
     this.sideInputIds = sideInputIds;
-    this.usesTimers = payload.getTimersCount() > 0;
-    if (usesTimers) {
-      // We only need to lock if we have timers. 1) Timers can
-      // interfere with state access. 2) Even without state access,
-      // setting timers can interfere with firing timers.
-      this.stateBackendLock = new ReentrantLock();
-    } else {
-      // Plain state access is guaranteed to not interfere with the state
-      // backend. The current key of the state backend is set manually before
-      // accessing the keyed state. Flink's automatic key setting before
-      // processing elements is overridden in this class.
-      this.stateBackendLock = NoopLock.get();
-    }
+    this.stateBackendLock = new ReentrantLock();
   }
 
   @Override
@@ -324,25 +314,26 @@ public class ExecutableStageDoFnOperator<InputT, OutputT> extends DoFnOperator<I
     }
   }
 
+  /**
+   * Note: This is only relevant when we have a stateful DoFn. We want to control the key of the
+   * state backend ourselves and we must avoid any concurrent setting of the current active key. By
+   * overwriting this, we also prevent unnecessary serialization as the key has to be encoded as a
+   * byte array.
+   */
   @Override
-  public void setKeyContextElement1(StreamRecord record) throws Exception {
-    // Note: This is only relevant when we have a stateful DoFn.
-    // We want to control the key of the state backend ourselves and
-    // we must avoid any concurrent setting of the current active key.
-    // By overwriting this, we also prevent unnecessary serialization
-    // as the key has to be encoded as a byte array.
-  }
+  public void setKeyContextElement1(StreamRecord record) {}
 
+  /**
+   * We don't to set anything here. This is due to asynchronous nature of processing elements from
+   * the SDK Harness. The Flink runtime sets the current key before calling {@code processElement},
+   * but this does not work when sending elements to the SDK harness which may be processed at an
+   * arbitrary later point in time. State for keys is also accessed asynchronously via state
+   * requests.
+   *
+   * <p>We set the key only as it is required for 1) State requests 2) Timers (setting/firing).
+   */
   @Override
-  public void setCurrentKey(Object key) {
-    // We don't need to set anything, the key is set manually on the state backend in
-    // the case of state access. For timers, the key will be extracted from the timer
-    // element, i.e. in HeapInternalTimerService
-    if (!usesTimers) {
-      throw new UnsupportedOperationException(
-          "Current key for state backend can only be set by state requests from SDK workers or when processing timers.");
-    }
-  }
+  public void setCurrentKey(Object key) {}
 
   @Override
   public Object getCurrentKey() {
@@ -437,7 +428,8 @@ public class ExecutableStageDoFnOperator<InputT, OutputT> extends DoFnOperator<I
             (Coder<BoundedWindow>) windowingStrategy.getWindowFn().windowCoder(),
             keySelector,
             this::setTimer);
-    return sdkHarnessRunner;
+
+    return ensureStateCleanup(sdkHarnessRunner);
   }
 
   @Override
@@ -687,6 +679,86 @@ public class ExecutableStageDoFnOperator<InputT, OutputT> extends DoFnOperator<I
     public DoFn<InputT, OutputT> getFn() {
       throw new UnsupportedOperationException();
     }
+  }
+
+  private DoFnRunner<InputT, OutputT> ensureStateCleanup(
+      SdkHarnessDoFnRunner<InputT, OutputT> sdkHarnessRunner) {
+    if (keyCoder == null) {
+      // There won't be any state to clean up
+      // (stateful functions have to be keyed)
+      return sdkHarnessRunner;
+    }
+    // Takes care of state cleanup via StatefulDoFnRunner
+    Coder windowCoder = windowingStrategy.getWindowFn().windowCoder();
+    StatefulDoFnRunner.CleanupTimer<InputT> cleanupTimer =
+        new StatefulDoFnRunner.CleanupTimer<InputT>() {
+
+          private static final String GC_TIMER_ID = "__user-state-cleanup__";
+
+          @Override
+          public Instant currentInputWatermarkTime() {
+            return timerInternals.currentInputWatermarkTime();
+          }
+
+          @Override
+          public void setForWindow(InputT input, BoundedWindow window) {
+            Preconditions.checkNotNull(input, "Null input passed to CleanupTimer");
+            // make sure this fires after any window.maxTimestamp() timers
+            Instant gcTime = LateDataUtils.garbageCollectionTime(window, windowingStrategy).plus(1);
+            ByteBuffer key;
+            try {
+              key =
+                  ByteBuffer.wrap(
+                      CoderUtils.encodeToByteArray((Coder) keyCoder, ((KV) input).getKey()));
+            } catch (CoderException e) {
+              throw new RuntimeException("Failed to encode key for Flink state backend", e);
+            }
+            // Ensure the state backend is not concurrently accessed by the state requests
+            try {
+              stateBackendLock.lock();
+              // Set these two to ensure correct timer registration
+              // 1) For the timer setting
+              sdkHarnessRunner.setCurrentTimerKey(key);
+              // 2) For the timer deduplication
+              getKeyedStateBackend().setCurrentKey(key);
+              timerInternals.setTimer(
+                  StateNamespaces.window(windowCoder, window),
+                  GC_TIMER_ID,
+                  gcTime,
+                  TimeDomain.EVENT_TIME);
+            } finally {
+              stateBackendLock.unlock();
+            }
+          }
+
+          @Override
+          public boolean isForWindow(
+              String timerId, BoundedWindow window, Instant timestamp, TimeDomain timeDomain) {
+            boolean isEventTimer = timeDomain.equals(TimeDomain.EVENT_TIME);
+            Instant gcTime = LateDataUtils.garbageCollectionTime(window, windowingStrategy);
+            gcTime = gcTime.plus(1);
+            return isEventTimer && GC_TIMER_ID.equals(timerId) && gcTime.equals(timestamp);
+          }
+        };
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    StatefulDoFnRunner.StateCleaner<BoundedWindow> stateCleaner =
+        window -> {
+          try {
+            stateBackendLock.lock();
+            for (UserStateReference userState : executableStage.getUserStates()) {
+              StateNamespace namespace = StateNamespaces.window(windowCoder, window);
+              BagState<Object> state =
+                  keyedStateInternals.state(namespace, StateTags.bag(userState.localName(), null));
+              state.clear();
+            }
+          } finally {
+            stateBackendLock.unlock();
+          }
+        };
+
+    return DoFnRunners.defaultStatefulDoFnRunner(
+        doFn, sdkHarnessRunner, windowingStrategy, cleanupTimer, stateCleaner);
   }
 
   private static class NoOpDoFn<InputT, OutputT> extends DoFn<InputT, OutputT> {
