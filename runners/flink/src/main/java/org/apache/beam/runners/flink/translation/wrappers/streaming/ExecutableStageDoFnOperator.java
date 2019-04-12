@@ -343,6 +343,7 @@ public class ExecutableStageDoFnOperator<InputT, OutputT> extends DoFnOperator<I
 
   private void setTimer(WindowedValue<InputT> timerElement, TimerInternals.TimerData timerData) {
     try {
+      LOG.debug("Setting timer: {} {}", timerElement, timerData);
       Object key = keySelector.getKey(timerElement);
       sdkHarnessRunner.setCurrentTimerKey(key);
       // We have to synchronize to ensure the state backend is not concurrently accessed by the
@@ -350,7 +351,13 @@ public class ExecutableStageDoFnOperator<InputT, OutputT> extends DoFnOperator<I
       try {
         stateBackendLock.lock();
         getKeyedStateBackend().setCurrentKey(key);
-        timerInternals.setTimer(timerData);
+        if (timerData.getTimestamp().isAfter(BoundedWindow.TIMESTAMP_MAX_VALUE)) {
+          // TODO: "Canceling of a timer by ID is not yet supported."
+          timerInternals.deleteTimer(
+              timerData.getNamespace(), timerData.getTimerId(), timerData.getDomain());
+        } else {
+          timerInternals.setTimer(timerData);
+        }
       } finally {
         stateBackendLock.unlock();
       }
